@@ -1,6 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
+
+import { client } from "@/lib/auth";
+import { connectPowerSync, disconnectPowerSync } from "@/lib/powersync";
 
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
@@ -28,10 +31,40 @@ function App() {
   return (
     <StrictMode>
       <QueryClientProvider client={queryClient}>
+        <PowerSyncAuthBridge />
         <RouterWithAuth />
       </QueryClientProvider>
     </StrictMode>
   );
+}
+
+function PowerSyncAuthBridge() {
+  const session = client.auth.useSession();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const userId = session.data?.user?.id;
+
+      if (!userId) {
+        await disconnectPowerSync();
+        return;
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      await connectPowerSync();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session.data?.user?.id]);
+
+  return null;
 }
 
 function RouterWithAuth() {
