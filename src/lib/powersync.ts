@@ -7,9 +7,11 @@ import {
   Schema,
   Table,
   column,
-  createBaseLogger,
+  createBaseLogger,CrudEntry,UpdateType
 } from "@powersync/web";
 import { client } from "@/lib/auth";
+
+ const FATAL_RESPONSE_CODES: RegExp[] = [];
 
 export const powersyncLogger = createBaseLogger();
 powersyncLogger.useDefaults();
@@ -63,8 +65,61 @@ export class PowerSyncConnector implements PowerSyncBackendConnector  {
     } satisfies PowerSyncCredentials;
   }
 
-  async uploadData(database: AbstractPowerSyncDatabase) {
-    console.log('uploadDataNOOP');
+  async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {
+    const transaction = await database.getNextCrudTransaction();
+
+    if (!transaction) {
+      return;
+    }
+
+    let lastOp: CrudEntry | null = null;
+    try {
+      // Note: If transactional consistency is important, use database functions
+      // or edge functions to process the entire transaction in a single call.
+      for (const op of transaction.crud) {
+        lastOp = op;
+        const table = client.from(op.table as any);
+        let result: any;
+        switch (op.op) {
+          case UpdateType.PUT:
+            const record = { ...(op.opData as any), id: op.id };
+            result = await table.upsert(record as any);
+            break;
+          case UpdateType.PATCH:
+            result = await table.update(op.opData as any).eq('id', op.id);
+            break;
+          case UpdateType.DELETE:
+            result = await table.delete().eq('id', op.id);
+            break;
+        }
+
+        if (result.error) {
+          console.error(result.error);
+          result.error.message = `Could not update Neon. Received error: ${result.error.message}`;
+          throw result.error;
+        }
+      }
+
+      await transaction.complete();
+    } catch (ex: any) {
+      console.debug(ex);
+      if (typeof ex.code == 'string' && FATAL_RESPONSE_CODES.some((regex) => regex.test(ex.code))) {
+        /**
+         * Instead of blocking the queue with these errors,
+         * discard the (rest of the) transaction.
+         *
+         * Note that these errors typically indicate a bug in the application.
+         * If protecting against data loss is important, save the failing records
+         * elsewhere instead of discarding, and/or notify the user.
+         */
+        console.error('Data upload error - discarding:', lastOp, ex);
+        await transaction.complete();
+      } else {
+        // Error may be retryable - e.g. network error or temporary server error.
+        // Throwing an error here causes this call to be retried after a delay.
+        throw ex;
+      }
+    }
   }
 }
 
