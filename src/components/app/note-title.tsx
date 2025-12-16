@@ -1,5 +1,6 @@
 import { Note } from "@/lib/api";
-import { client } from "@/lib/auth";
+import { powersync } from "@/lib/powersync";
+import { queryKeys } from "@/lib/query-keys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
@@ -51,19 +52,17 @@ export function NoteTitle({
       const newTitle = titleRef.current.textContent.trim();
       if (newTitle !== title) {
         try {
-          const { error } = await client
-            .from("notes")
-            .update({ title: newTitle })
-            .eq("id", id);
+          await powersync.execute(
+            "UPDATE notes SET title = ?, updated_at = ? WHERE id = ?",
+            [newTitle, new Date().toISOString(), id],
+          );
 
-          queryClient.setQueryData(["note", id], (old: Note) => ({
+          queryClient.setQueryData(queryKeys.note(id), (old: Note) => ({
             ...old,
             title: newTitle,
           }));
 
-          if (error) {
-            throw error;
-          }
+          queryClient.invalidateQueries({ queryKey: queryKeys.notes() });
 
           setTitleValue(newTitle);
         } catch (err) {

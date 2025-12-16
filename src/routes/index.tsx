@@ -1,9 +1,10 @@
 import Header from "@/components/app/header";
 import NotesList from "@/components/app/notes-list";
-import type { Note } from "@/lib/api";
 import { client } from "@/lib/auth";
-import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { useQuery } from "@powersync/tanstack-react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import type { Note } from "@/lib/api";
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,
@@ -21,23 +22,10 @@ export const Route = createFileRoute("/")({
 function useNotes() {
   const session = client.auth.useSession();
   return useQuery({
-    queryKey: ["notes"],
-    queryFn: async (): Promise<Array<Note>> => {
-      if (!session.data) {
-        throw new Error("User is not authenticated");
-      }
-      const { data, error } = await client
-        .from("notes")
-        .select("id, title, created_at, owner_id, shared")
-        .eq("owner_id", session.data.user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        throw error;
-      }
-
-      return data as Array<Note>;
-    },
+    queryKey: queryKeys.notes(),
+    enabled: Boolean(session.data?.user?.id),
+    query: "SELECT id, title, created_at, owner_id, shared FROM notes WHERE owner_id = ? ORDER BY created_at DESC",
+    parameters: [session.data?.user?.id],
   });
 }
 
@@ -58,7 +46,7 @@ function RouteComponent() {
       {status === "error" && (
         <div className="text-foreground/70">Error: {error.message}</div>
       )}
-      {status === "success" && <NotesList notes={data} />}
+      {status === "success" && <NotesList notes={data as Note[]} />}
     </>
   );
 }

@@ -1,10 +1,11 @@
+import React from "react";
 import { NoteTitle } from "@/components/app/note-title";
 import { Toggle } from "@/components/ui/toggle";
-import { Note } from "@/lib/api";
-import { client } from "@/lib/auth";
+import { powersync } from "@/lib/powersync";
+import { queryKeys } from "@/lib/query-keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@powersync/tanstack-react-query";
 import { Share2 } from "lucide-react";
-import { useEffect, useState } from "react";
 
 type Props = {
   id: string;
@@ -23,48 +24,43 @@ export default function NoteHeader({
   user_id,
   onShareToggle,
 }: Props) {
-  // Optimistic UI state for shared toggle
-  const [optimisticShared, setOptimisticShared] = useState<boolean | null>(
-    null,
-  );
+  const { data: sharedRows } = useQuery<{ shared: number | boolean }, Error>({
+    queryKey: queryKeys.noteShared(id),
+    enabled: Boolean(id),
+    query: "SELECT shared FROM notes WHERE id = ?",
+    parameters: [id],
+  });
 
-  useEffect(() => {
-    if (shared !== undefined && optimisticShared === null) {
-      setOptimisticShared(shared);
+  const hydratedShared = (() => {
+    const row = sharedRows?.[0];
+    if (!row) {
+      return undefined;
     }
-  }, [shared, optimisticShared]);
 
-  // Determine the current shared state (use optimistic value if available)
-  const isShared =
-    optimisticShared !== null ? optimisticShared : shared || false;
+    return typeof row.shared === "boolean" ? row.shared : Boolean(row.shared);
+  })();
+
+  const isShared = hydratedShared ?? shared ?? false;
   const queryClient = useQueryClient();
+
+  // Invalidate on mount to catch changes that occurred while unmounted
+  React.useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.noteShared(id) });
+  }, [queryClient, id]);
 
   const toggleShareMutation = useMutation({
     mutationFn: async (newSharedState: boolean) => {
-      const { error } = await client
-        .from("notes")
-        .update({
-          shared: newSharedState,
-        })
-        .eq("id", id);
+      await powersync.execute(
+        "UPDATE notes SET shared = ?, updated_at = ? WHERE id = ?",
+        [newSharedState ? 1 : 0, new Date().toISOString(), id],
+      );
 
-      if (error) throw error;
       return { shared: newSharedState };
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(["note", id], data);
-
-      queryClient.setQueryData(["notes"], (old: Note[]) =>
-        old.map((note) => (note.id === id ? data : note)),
-      );
-
       if (onShareToggle) {
         onShareToggle(data.shared);
       }
-    },
-    onError: () => {
-      // Revert to original state if there's an error
-      setOptimisticShared(shared);
     },
   });
 
@@ -82,9 +78,6 @@ export default function NoteHeader({
           className="cursor-pointer h-6 w-6 min-w-6"
           onPressedChange={() => {
             const newSharedState = !isShared;
-            // Update local state immediately for instant UI feedback
-            setOptimisticShared(newSharedState);
-            // Then trigger the mutation
             toggleShareMutation.mutate(newSharedState);
           }}
         >

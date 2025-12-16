@@ -4,22 +4,22 @@ import {
   CurrentParagraph,
   Paragraph as WrittenParagraph,
 } from "@/components/app/paragraph";
-import type { Note, NoteWithParagraphs, Paragraph } from "@/lib/api";
+import type { NoteWithParagraphs, Paragraph } from "@/lib/api";
 import { client } from "@/lib/auth";
+import { powersync } from "@/lib/powersync";
+import { queryKeys } from "@/lib/query-keys";
 import { generateNameNote } from "@/lib/utils";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@powersync/tanstack-react-query";
 import {
   createFileRoute,
   redirect,
   useNavigate,
   useSearch,
 } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
-type InProgressParagraph = {
-  content: string;
-  timestamp: string;
-};
+type InProgressParagraph = { content: string; timestamp: string };
 
 // Define the search params schema
 export const Route = createFileRoute("/note")({
@@ -45,65 +45,74 @@ function NoteComponent() {
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
 
-  const [paragraphs, setParagraphs] = useState<Paragraph[]>([]);
   const [currentParagraph, setCurrentParagraph] = useState<InProgressParagraph>(
-    {
-      content: "",
-      timestamp: new Date().toISOString(),
-    },
+    { content: "", timestamp: new Date().toISOString() },
   );
-  const [currentTime, setCurrentTime] = useState<string>(
-    new Date().toISOString(),
-  );
+  const [currentTime, setCurrentTime] = useState(() => new Date().toISOString());
   const creatingNoteRef = useRef(false);
+  const storageKey = id ? `note-${id}-current-paragraph` : null;
 
   const createNoteMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await client
-        .from("notes")
-        .insert({ title: generateNameNote() })
-        .select(
-          "id, title, shared, owner_id, paragraphs (id, content, created_at, note_id)",
-        )
-        .single();
+      // User is guaranteed to be authenticated by beforeLoad guard
+      const userId = session.data!.user!.id;
 
-      if (error) {
-        throw error;
-      }
+      const noteId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const title = generateNameNote();
 
-      return data;
+      await powersync.execute(
+        "INSERT INTO notes (id, owner_id, title, shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        [noteId, userId, title, 0, now, now],
+      );
+
+      return {
+        id: noteId,
+        title,
+        shared: false,
+        owner_id: userId,
+        created_at: now,
+        paragraphs: [],
+      } satisfies NoteWithParagraphs;
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(["note", data.id], data);
-      queryClient.setQueryData(["notes"], (old: Note[]) => [data, ...old]);
+      queryClient.setQueryData(queryKeys.note(data.id), data);
       navigate({ search: { id: data.id } });
     },
   });
 
   const {
-    data: note,
-    isLoading,
-    error,
-  } = useQuery({
-    queryKey: ["note", id],
+    data: noteRows,
+    isLoading: isLoadingNote,
+    error: noteError,
+  } = useQuery<{ id: string; title: string; shared: number | boolean; owner_id: string }, Error>({
+    queryKey: queryKeys.note(id!),
     retry: false,
     enabled: id !== "new-note" && Boolean(id),
-    queryFn: async (): Promise<Omit<NoteWithParagraphs, "created_at">> => {
-      const { data, error } = await client
-        .from("notes")
-        .select(
-          "id, title, shared, owner_id, paragraphs (id, content, created_at, note_id)",
-        )
-        .eq("id", id!)
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      return data as Omit<NoteWithParagraphs, "created_at">;
-    },
+    query: "SELECT id, title, shared, owner_id FROM notes WHERE id = ?",
+    parameters: [id!],
   });
+
+  const {
+    data: paragraphRows,
+    isLoading: isLoadingParagraphs,
+    error: paragraphsError,
+  } = useQuery<Paragraph, Error>({
+    queryKey: queryKeys.noteParagraphs(id!),
+    retry: false,
+    enabled: id !== "new-note" && Boolean(id),
+    query:
+      "SELECT id, note_id, content, created_at FROM paragraphs WHERE note_id = ? ORDER BY created_at ASC",
+    parameters: [id!],
+  });
+
+  const noteRow = noteRows?.[0];
+  const note = noteRow
+    ? { ...noteRow, shared: Boolean(noteRow.shared) } satisfies Omit<NoteWithParagraphs, "created_at" | "paragraphs">
+    : undefined;
+
+  const isLoading = isLoadingNote || isLoadingParagraphs;
+  const error = noteError ?? paragraphsError;
 
   // Create new note if needed
   useEffect(() => {
@@ -115,38 +124,20 @@ function NoteComponent() {
     }
   }, [id]);
 
-  // Load saved paragraphs
+  // Load/save in-progress paragraph from localStorage
   useEffect(() => {
-    if (note?.paragraphs) {
-      setParagraphs(note.paragraphs);
+    if (!storageKey) return;
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try { setCurrentParagraph(JSON.parse(saved)); } catch { /* ignore */ }
     }
-  }, [note]);
+  }, [storageKey]);
 
-  // Load in-progress paragraph from localStorage
   useEffect(() => {
-    if (id) {
-      const savedParagraph = localStorage.getItem(
-        `note-${id}-current-paragraph`,
-      );
-      if (savedParagraph) {
-        try {
-          setCurrentParagraph(JSON.parse(savedParagraph));
-        } catch (e) {
-          console.error("Failed to parse saved paragraph", e);
-        }
-      }
+    if (storageKey && currentParagraph.content) {
+      localStorage.setItem(storageKey, JSON.stringify(currentParagraph));
     }
-  }, [id]);
-
-  // Save in-progress paragraph to localStorage
-  useEffect(() => {
-    if (id && currentParagraph.content) {
-      localStorage.setItem(
-        `note-${id}-current-paragraph`,
-        JSON.stringify(currentParagraph),
-      );
-    }
-  }, [currentParagraph, id]);
+  }, [currentParagraph, storageKey]);
 
   // Update current time every second
   useEffect(() => {
@@ -156,78 +147,42 @@ function NoteComponent() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle textarea input
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setCurrentParagraph({
-      content: e.target.value,
-      timestamp: currentTime,
-    });
-  };
+  // Invalidate on mount to catch changes that occurred while unmounted
+  useEffect(() => {
+    if (id && id !== "new-note") {
+      queryClient.invalidateQueries({ queryKey: queryKeys.note(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.noteParagraphs(id) });
+    }
+  }, [queryClient, id]);
 
-  // Handle Enter key to submit paragraph
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const addParagraphMutation = useMutation({
+    mutationFn: async (content: string) => {
+      await powersync.execute(
+        "INSERT INTO paragraphs (id, note_id, content, created_at) VALUES (?, ?, ?, ?)",
+        [crypto.randomUUID(), id, content, new Date().toISOString()],
+      );
+    },
+    onError: (err) => {
+      console.error("Failed to save paragraph", err);
+      alert("Failed to save paragraph. Please try again.");
+    },
+  });
+
+  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setCurrentParagraph({ content: e.target.value, timestamp: currentTime });
+  }, [currentTime]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-
-      if (currentParagraph.content.trim() && id) {
-        // Create a temporary paragraph to add to the UI immediately
-        const tempParagraph = {
-          id: crypto.randomUUID(), // Generate a temporary ID
-          note_id: id,
-          content: currentParagraph.content.trim(),
-          created_at: new Date().toISOString(),
-        };
-
-        // Add new paragraph to state immediately
-        setParagraphs([...paragraphs, tempParagraph]);
-
-        // Clear current paragraph
-        const previousParagraph = currentParagraph;
-        setCurrentParagraph({
-          content: "",
-          timestamp: new Date().toISOString(),
-        });
-
-        // Remove from localStorage
-        localStorage.removeItem(`note-${id}-current-paragraph`);
-
-        // Save paragraph to database in the background
-        (async () => {
-          try {
-            const { data, error } = await client
-              .from("paragraphs")
-              .insert({
-                note_id: id,
-                content: previousParagraph.content.trim(),
-              })
-              .select("*")
-              .single();
-
-            if (error) {
-              throw error;
-            }
-
-            if (data) {
-              // Update the paragraph in state with the actual data from the server
-              setParagraphs((currentParagraphs) =>
-                currentParagraphs.map((p) =>
-                  p.id === tempParagraph.id ? (data as Paragraph) : p,
-                ),
-              );
-            }
-          } catch (err) {
-            console.error("Failed to save paragraph", err);
-            // If saving fails, remove the temporary paragraph
-            setParagraphs((currentParagraphs) =>
-              currentParagraphs.filter((p) => p.id !== tempParagraph.id),
-            );
-            // Show error to user
-            alert("Failed to save paragraph. Please try again.");
-          }
-        })();
+      const content = currentParagraph.content.trim();
+      if (content && id) {
+        setCurrentParagraph({ content: "", timestamp: new Date().toISOString() });
+        if (storageKey) localStorage.removeItem(storageKey);
+        addParagraphMutation.mutate(content);
       }
     }
-  };
+  }, [currentParagraph.content, id, storageKey, addParagraphMutation]);
 
   if (!session.data?.user) {
     return null;
@@ -262,7 +217,7 @@ function NoteComponent() {
           user_id={session.data.user.id}
         />
         <main className="space-y-4">
-          {paragraphs.map((para) => (
+          {(paragraphRows ?? []).map((para) => (
             <WrittenParagraph
               key={para.id}
               content={para.content}

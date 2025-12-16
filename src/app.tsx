@@ -3,7 +3,8 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { StrictMode, useEffect } from "react";
 
 import { client } from "@/lib/auth";
-import { connectPowerSync, disconnectPowerSync } from "@/lib/powersync";
+import { PowerSyncContext } from "@powersync/react";
+import { connectPowerSync, disconnectPowerSync, powersync } from "@/lib/powersync";
 
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
@@ -30,10 +31,12 @@ declare module "@tanstack/react-router" {
 function App() {
   return (
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <PowerSyncAuthBridge />
-        <RouterWithAuth />
-      </QueryClientProvider>
+      <PowerSyncContext.Provider value={powersync}>
+        <QueryClientProvider client={queryClient}>
+          <PowerSyncAuthBridge />
+          <RouterWithAuth />
+        </QueryClientProvider>
+      </PowerSyncContext.Provider>
     </StrictMode>
   );
 }

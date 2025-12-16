@@ -60,7 +60,7 @@ export class PowerSyncConnector implements PowerSyncBackendConnector  {
     console.log(`powersync jwt = ${session.data?.user.id}`);
     
     return {
-        endpoint: 'https://693c551e7e2a07e6df7bec67.powersync.journeyapps.com',
+        endpoint: import.meta.env.VITE_POWERSYNC_URL,
         token: session.data?.session.token ?? ''
     } satisfies PowerSyncCredentials;
   }
