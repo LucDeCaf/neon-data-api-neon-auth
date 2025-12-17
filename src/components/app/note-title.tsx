@@ -1,9 +1,11 @@
 import { Note } from "@/lib/api";
-import { powersync } from "@/lib/powersync";
+import { powersync, powersyncDrizzle } from "@/lib/powersync";
 import { queryKeys } from "@/lib/query-keys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { eq } from "drizzle-orm";
+import { notes } from "@/lib/powersync-schema";
 
 export function NoteTitle({
   id,
@@ -52,10 +54,7 @@ export function NoteTitle({
       const newTitle = titleRef.current.textContent.trim();
       if (newTitle !== title) {
         try {
-          await powersync.execute(
-            "UPDATE notes SET title = ?, updated_at = ? WHERE id = ?",
-            [newTitle, new Date().toISOString(), id],
-          );
+          await powersyncDrizzle.update(notes).set({title: newTitle, updated_at: new Date().toISOString()}).where(eq(notes.id, id));
 
           queryClient.setQueryData(queryKeys.note(id), (old: Note) => ({
             ...old,

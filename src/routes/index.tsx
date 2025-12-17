@@ -5,6 +5,11 @@ import { queryKeys } from "@/lib/query-keys";
 import { useQuery } from "@powersync/tanstack-react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import type { Note } from "@/lib/api";
+import { powersyncDrizzle } from "@/lib/powersync";
+import { notes } from "@/lib/powersync-schema";
+import { eq, desc } from "drizzle-orm";
+import { toCompilableQuery } from "@powersync/drizzle-driver";
+
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,
@@ -21,11 +26,12 @@ export const Route = createFileRoute("/")({
 
 function useNotes() {
   const session = client.auth.useSession();
+  const query = powersyncDrizzle.select().from(notes).where(eq(notes.owner_id, session.data?.user?.id ?? "")).orderBy(desc(notes.created_at));
+  
   return useQuery({
     queryKey: queryKeys.notes(),
     enabled: Boolean(session.data?.user?.id),
-    query: "SELECT id, title, created_at, owner_id, shared FROM notes WHERE owner_id = ? ORDER BY created_at DESC",
-    parameters: [session.data?.user?.id],
+    query: toCompilableQuery(query),
   });
 }
 

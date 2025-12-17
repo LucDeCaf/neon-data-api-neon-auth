@@ -7,6 +7,7 @@
         "@journeyapps/wa-sqlite": "^1.4.1",
         "@neondatabase/neon-js": "^0.1.0-alpha.6",
         "@neondatabase/serverless": "^1.0.2",
+        "@powersync/drizzle-driver": "^0.7.1",
         "@powersync/react": "^1.8.2",
         "@powersync/tanstack-react-query": "^0.1.12",
         "@powersync/web": "^1.30.0",
@@ -302,6 +303,8 @@
     "@pinojs/redact": ["@pinojs/redact@0.4.0", "", {}, "sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg=="],
 
     "@powersync/common": ["@powersync/common@1.44.0", "", { "dependencies": { "async-mutex": "^0.5.0", "event-iterator": "^2.0.0" } }, "sha512-vdjSKJzXtjnenOT4EFRcTpQQ8MFV8+0KA+sf7GBVEo7zy6cg7SpQSv5AjdyX/CivOolMosjsV6Xk3WP9e7djBw=="],
+
+    "@powersync/drizzle-driver": ["@powersync/drizzle-driver@0.7.1", "", { "peerDependencies": { "@powersync/common": "^1.44.0", "drizzle-orm": "<1.0.0" } }, "sha512-qWBFn/cCl72T3x5GvBDndWIuc24fnAExCqGRk3Qk7PJAt6yRKxgt89+9N1UNjRDmqd5n2ctFFC1BbCcKjgVr3w=="],
 
     "@powersync/react": ["@powersync/react@1.8.2", "", { "peerDependencies": { "@powersync/common": "^1.41.1", "react": "*" } }, "sha512-15z8JKt66dq2bqX2P7QQ71eUIx3DWLc5WMdB/PDc9MIAHf1SERqKfzbzWGxKplQGHC/GogDA7G8IDoRadhNXOA=="],
 

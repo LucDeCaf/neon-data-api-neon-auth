@@ -6,6 +6,10 @@ import { queryKeys } from "@/lib/query-keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@powersync/tanstack-react-query";
 import { Share2 } from "lucide-react";
+import { powersyncDrizzle } from "@/lib/powersync";
+import { notes } from "@/lib/powersync-schema";
+import { toCompilableQuery } from "@powersync/drizzle-driver";
+import { eq, desc } from "drizzle-orm";
 
 type Props = {
   id: string;
@@ -24,11 +28,11 @@ export default function NoteHeader({
   user_id,
   onShareToggle,
 }: Props) {
-  const { data: sharedRows } = useQuery<{ shared: number | boolean }, Error>({
+  const query = powersyncDrizzle.select({ shared: notes.shared }).from(notes).where(eq(notes.id, id));
+  const { data: sharedRows } = useQuery({
     queryKey: queryKeys.noteShared(id),
     enabled: Boolean(id),
-    query: "SELECT shared FROM notes WHERE id = ?",
-    parameters: [id],
+    query: toCompilableQuery(query)
   });
 
   const hydratedShared = (() => {
@@ -50,10 +54,7 @@ export default function NoteHeader({
 
   const toggleShareMutation = useMutation({
     mutationFn: async (newSharedState: boolean) => {
-      await powersync.execute(
-        "UPDATE notes SET shared = ?, updated_at = ? WHERE id = ?",
-        [newSharedState ? 1 : 0, new Date().toISOString(), id],
-      );
+      await powersyncDrizzle.update(notes).set({ shared: newSharedState, updated_at: new Date().toISOString() }).where(eq(notes.id, id));
 
       return { shared: newSharedState };
     },

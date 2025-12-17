@@ -18,6 +18,10 @@ import {
   useSearch,
 } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { powersyncDrizzle } from "@/lib/powersync";
+import { notes, paragraphs, notesRelations } from "@/lib/powersync-schema";
+import { toCompilableQuery } from "@powersync/drizzle-driver";
+import { eq, desc, asc } from "drizzle-orm";
 
 type InProgressParagraph = { content: string; timestamp: string };
 
@@ -61,10 +65,7 @@ function NoteComponent() {
       const now = new Date().toISOString();
       const title = generateNameNote();
 
-      await powersync.execute(
-        "INSERT INTO notes (id, owner_id, title, shared, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-        [noteId, userId, title, 0, now, now],
-      );
+      await powersyncDrizzle.insert(notes).values({id: noteId, owner_id: userId, title, shared: false, created_at: now, updated_at: now});
 
       return {
         id: noteId,
@@ -81,6 +82,8 @@ function NoteComponent() {
     },
   });
 
+  const noteQuery = powersyncDrizzle.select().from(notes).where(eq(notes.id, id!));
+
   const {
     data: noteRows,
     isLoading: isLoadingNote,
@@ -89,9 +92,10 @@ function NoteComponent() {
     queryKey: queryKeys.note(id!),
     retry: false,
     enabled: id !== "new-note" && Boolean(id),
-    query: "SELECT id, title, shared, owner_id FROM notes WHERE id = ?",
-    parameters: [id!],
+    query: toCompilableQuery(noteQuery),
   });
+
+  const paragraphQuery = powersyncDrizzle.select().from(paragraphs).where(eq(paragraphs.note_id, id!)).orderBy(asc(paragraphs.created_at));
 
   const {
     data: paragraphRows,
@@ -101,9 +105,7 @@ function NoteComponent() {
     queryKey: queryKeys.noteParagraphs(id!),
     retry: false,
     enabled: id !== "new-note" && Boolean(id),
-    query:
-      "SELECT id, note_id, content, created_at FROM paragraphs WHERE note_id = ? ORDER BY created_at ASC",
-    parameters: [id!],
+    query: toCompilableQuery(paragraphQuery),
   });
 
   const noteRow = noteRows?.[0];
@@ -157,10 +159,8 @@ function NoteComponent() {
 
   const addParagraphMutation = useMutation({
     mutationFn: async (content: string) => {
-      await powersync.execute(
-        "INSERT INTO paragraphs (id, note_id, content, created_at) VALUES (?, ?, ?, ?)",
-        [crypto.randomUUID(), id, content, new Date().toISOString()],
-      );
+      if (!id) throw new Error("Note ID is required");
+      await powersyncDrizzle.insert(paragraphs).values({id: crypto.randomUUID(), note_id: id, content, created_at: new Date().toISOString()});
     },
     onError: (err) => {
       console.error("Failed to save paragraph", err);

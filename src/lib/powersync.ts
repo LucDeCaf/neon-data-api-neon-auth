@@ -10,6 +10,12 @@ import {
   createBaseLogger,CrudEntry,UpdateType
 } from "@powersync/web";
 import { client } from "@/lib/auth";
+import { wrapPowerSyncWithDrizzle, DrizzleAppSchema } from '@powersync/drizzle-driver';
+
+import { relations } from 'drizzle-orm';
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { drizzleSchema } from "./powersync-schema";
+
 
  const FATAL_RESPONSE_CODES: RegExp[] = [];
 
@@ -39,10 +45,10 @@ const paragraphs = new Table(
   { indexes: {} },
 );
 
-export const AppSchema = new Schema({
-  notes,
-  paragraphs,
-});
+// export const AppSchema = new Schema({
+//   notes,
+//   paragraphs,
+// });
 
 export type Database = (typeof AppSchema)["types"];
 export type NoteRecord = Database["notes"];
@@ -56,7 +62,6 @@ export class PowerSyncConnector implements PowerSyncBackendConnector  {
       throw new Error('Could not fetch Neon credentials.');
     }
     
-
     console.log(`powersync jwt = ${session.data?.user.id}`);
     
     return {
@@ -125,12 +130,16 @@ export class PowerSyncConnector implements PowerSyncBackendConnector  {
 
 const connector = new PowerSyncConnector();
 
+export const AppSchema = new DrizzleAppSchema(drizzleSchema);
+
 export const powersync = new PowerSyncDatabase({
   schema: AppSchema,
   database: {
     dbFilename: "powersync.db",
   },
 });
+
+export const powersyncDrizzle = wrapPowerSyncWithDrizzle(powersync);
 
 let isInitialized = false;
 
@@ -140,6 +149,7 @@ export async function connectPowerSync() {
   }
   await powersync.connect(connector);
   isInitialized = true;
+  console.log("powersync connected");
 }
 
 export async function disconnectPowerSync() {
