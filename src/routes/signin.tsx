@@ -1,4 +1,5 @@
 import { client } from "@/lib/auth";
+import { neonConnector } from "@/lib/powersync";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
@@ -35,6 +36,8 @@ function SignInComponent() {
 
       const session = await client.auth.getSession();
       if (session.data) {
+        // Update the connector's cached session
+        neonConnector.updateSession(session.data);
         window.location.href = "/";
       } else {
         setError("Please enable cookies to continue.");

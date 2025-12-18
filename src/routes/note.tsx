@@ -5,8 +5,7 @@ import {
   Paragraph as WrittenParagraph,
 } from "@/components/app/paragraph";
 import type { NoteWithParagraphs, Paragraph } from "@/lib/api";
-import { client } from "@/lib/auth";
-import { powersync } from "@/lib/powersync";
+import { neonConnector } from "@/lib/powersync";
 import { queryKeys } from "@/lib/query-keys";
 import { generateNameNote } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -19,9 +18,9 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { powersyncDrizzle } from "@/lib/powersync";
-import { notes, paragraphs, notesRelations } from "@/lib/powersync-schema";
+import { notes, paragraphs } from "@/lib/powersync-schema";
 import { toCompilableQuery } from "@powersync/drizzle-driver";
-import { eq, desc, asc } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 
 type InProgressParagraph = { content: string; timestamp: string };
 
@@ -29,8 +28,9 @@ type InProgressParagraph = { content: string; timestamp: string };
 export const Route = createFileRoute("/note")({
   component: NoteComponent,
   async beforeLoad() {
-    const session = await client.auth.getSession();
-    if (!session.data) {
+    // Wait for connector to initialize (not guaranteed that the useEffect in app.tsx has run yet)
+    await neonConnector.init();
+    if (!neonConnector.currentSession) {
       throw redirect({
         to: "/signin",
       });
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/note")({
 });
 
 function NoteComponent() {
-  const session = client.auth.useSession();
+  const session = neonConnector.currentSession;
   const { id } = useSearch({ from: Route.fullPath });
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
@@ -59,7 +59,7 @@ function NoteComponent() {
   const createNoteMutation = useMutation({
     mutationFn: async () => {
       // User is guaranteed to be authenticated by beforeLoad guard
-      const userId = session.data!.user!.id;
+      const userId = session!.user!.id;
 
       const noteId = crypto.randomUUID();
       const now = new Date().toISOString();
@@ -184,14 +184,14 @@ function NoteComponent() {
     }
   }, [currentParagraph.content, id, storageKey, addParagraphMutation]);
 
-  if (!session.data?.user) {
+  if (!session?.user) {
     return null;
   }
 
   if (isLoading) {
     return (
       <>
-        <Header name={session.data.user.name} />
+        <Header name={session.user.name} />
         <div className="my-10 max-w-2xl mx-auto">
           <div className="text-foreground/70">Loading...</div>
         </div>
@@ -203,18 +203,18 @@ function NoteComponent() {
     return null;
   }
 
-  const isOwner = note.owner_id === session.data.user.id;
+  const isOwner = note.owner_id === session.user.id;
 
   return (
     <>
-      <Header name={session.data.user.name} />
+      <Header name={session.user.name} />
       <div className="flex flex-col gap-4">
         <NoteHeader
           id={note.id}
           title={note.title}
           shared={note.shared}
           owner_id={note.owner_id}
-          user_id={session.data.user.id}
+          user_id={session.user.id}
         />
         <main className="space-y-4">
           {(paragraphRows ?? []).map((para) => (

@@ -2,9 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { StrictMode, useEffect } from "react";
 
-import { client } from "@/lib/auth";
 import { PowerSyncContext } from "@powersync/react";
-import { connectPowerSync, disconnectPowerSync, powersync } from "@/lib/powersync";
+import { connectPowerSync, neonConnector, powersync } from "@/lib/powersync";
 
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
@@ -42,30 +41,35 @@ function App() {
 }
 
 function PowerSyncAuthBridge() {
-  const session = client.auth.useSession();
-
   useEffect(() => {
-    let cancelled = false;
+    // Initialize the connector and PowerSync
+    const initConnector = async () => {
+      await powersync.init();
+      await neonConnector.init();
 
-    (async () => {
-      const userId = session.data?.user?.id;
+      // Expose for console debugging
+      (window as any).powersync = powersync;
+    };
 
-      if (!userId) {
-        await disconnectPowerSync();
-        return;
-      }
+    // Listen for session changes
+    const unsubscribe = neonConnector.registerListener({
+      initialized: () => {
+        // If already have a session after init, connect PowerSync
+        if (neonConnector.currentSession) {
+          connectPowerSync();
+        }
+      },
+      sessionStarted: () => {
+        connectPowerSync();
+      },
+    });
 
-      if (cancelled) {
-        return;
-      }
-
-      await connectPowerSync();
-    })();
+    initConnector();
 
     return () => {
-      cancelled = true;
+      unsubscribe?.();
     };
-  }, [session.data?.user?.id]);
+  }, []);
 
   return null;
 }

@@ -1,7 +1,6 @@
 import React from "react";
 import { NoteTitle } from "@/components/app/note-title";
 import { Toggle } from "@/components/ui/toggle";
-import { powersync } from "@/lib/powersync";
 import { queryKeys } from "@/lib/query-keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@powersync/tanstack-react-query";
@@ -9,7 +8,7 @@ import { Share2 } from "lucide-react";
 import { powersyncDrizzle } from "@/lib/powersync";
 import { notes } from "@/lib/powersync-schema";
 import { toCompilableQuery } from "@powersync/drizzle-driver";
-import { eq, desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 type Props = {
   id: string;

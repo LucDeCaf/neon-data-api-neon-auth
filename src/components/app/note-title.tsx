@@ -1,5 +1,5 @@
 import { Note } from "@/lib/api";
-import { powersync, powersyncDrizzle } from "@/lib/powersync";
+import { powersyncDrizzle } from "@/lib/powersync";
 import { queryKeys } from "@/lib/query-keys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy } from "lucide-react";

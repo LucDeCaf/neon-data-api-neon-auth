@@ -1,4 +1,5 @@
 import { client } from "@/lib/auth";
+import { powersync, neonConnector } from "@/lib/powersync";
 import { useRouter } from "@tanstack/react-router";
 
 export default function Header({ name }: { name: string }) {
@@ -12,6 +13,8 @@ export default function Header({ name }: { name: string }) {
           className="text-foreground/70 font-normal cursor-pointer"
           onClick={async () => {
             await client.auth.signOut();
+            neonConnector.updateSession(null);
+            await powersync.disconnectAndClear();
             router.navigate({ to: "/signin" });
           }}
         >
