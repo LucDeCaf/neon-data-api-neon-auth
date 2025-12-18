@@ -1,11 +1,12 @@
-import { Note } from "@/lib/api";
 import { powersyncDrizzle } from "@/lib/powersync";
 import { queryKeys } from "@/lib/query-keys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Copy } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
-import { eq } from "drizzle-orm";
+import { eq, type InferSelectModel } from "drizzle-orm";
 import { notes } from "@/lib/powersync-schema";
+
+type Note = InferSelectModel<typeof notes>;
 
 export function NoteTitle({
   id,

@@ -4,7 +4,6 @@ import {
   CurrentParagraph,
   Paragraph as WrittenParagraph,
 } from "@/components/app/paragraph";
-import type { NoteWithParagraphs, Paragraph } from "@/lib/api";
 import { neonConnector } from "@/lib/powersync";
 import { queryKeys } from "@/lib/query-keys";
 import { generateNameNote } from "@/lib/utils";
@@ -20,9 +19,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { powersyncDrizzle } from "@/lib/powersync";
 import { notes, paragraphs } from "@/lib/powersync-schema";
 import { toCompilableQuery } from "@powersync/drizzle-driver";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, InferSelectModel } from "drizzle-orm";
 
 type InProgressParagraph = { content: string; timestamp: string };
+type Paragraph = InferSelectModel<typeof paragraphs>;
+type Note = InferSelectModel<typeof notes>;
 
 // Define the search params schema
 export const Route = createFileRoute("/note")({
@@ -73,8 +74,9 @@ function NoteComponent() {
         shared: false,
         owner_id: userId,
         created_at: now,
+        updated_at: now,
         paragraphs: [],
-      } satisfies NoteWithParagraphs;
+      }
     },
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.note(data.id), data);
@@ -88,7 +90,7 @@ function NoteComponent() {
     data: noteRows,
     isLoading: isLoadingNote,
     error: noteError,
-  } = useQuery<{ id: string; title: string; shared: number | boolean; owner_id: string }, Error>({
+  } = useQuery<Note, Error>({
     queryKey: queryKeys.note(id!),
     retry: false,
     enabled: id !== "new-note" && Boolean(id),
@@ -110,7 +112,7 @@ function NoteComponent() {
 
   const noteRow = noteRows?.[0];
   const note = noteRow
-    ? { ...noteRow, shared: Boolean(noteRow.shared) } satisfies Omit<NoteWithParagraphs, "created_at" | "paragraphs">
+    ? { ...noteRow, shared: Boolean(noteRow.shared) } 
     : undefined;
 
   const isLoading = isLoadingNote || isLoadingParagraphs;

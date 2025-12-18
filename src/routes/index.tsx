@@ -3,12 +3,11 @@ import NotesList from "@/components/app/notes-list";
 import { queryKeys } from "@/lib/query-keys";
 import { useQuery } from "@powersync/tanstack-react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import type { Note } from "@/lib/api";
 import { neonConnector, powersyncDrizzle } from "@/lib/powersync";
 import { notes } from "@/lib/powersync-schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, InferSelectModel } from "drizzle-orm";
 import { toCompilableQuery } from "@powersync/drizzle-driver";
-
+type Note = InferSelectModel<typeof notes>;
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,
