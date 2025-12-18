@@ -9,6 +9,15 @@ export function Footer({ className }: { className?: string }) {
       )}
     >
       built with{" "}
+            <a
+        href="https://powersync.com"
+        target="_blank"
+        rel="noopener"
+        className="underline"
+      >
+        PowerSync
+      </a>{" "}
+      💜 and{" "}
       <a
         href="https://neon.tech/home"
         target="_blank"
