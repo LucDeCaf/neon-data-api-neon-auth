@@ -22,7 +22,7 @@ This demo is built with:
 
 Before you begin, ensure you have:
 
-- [Bun](https://bun.sh/) (v1.0 or newer) installed
+- [pnpm](https://pnpm.io/) (v9.0 or newer) installed
 - A [Neon account](https://console.neon.tech/signup) (free tier works)
 
 ## Getting Started
@@ -44,7 +44,7 @@ For detailed instructions, see:
 ```bash
 git clone https://github.com/neondatabase-labs/neon-data-api-neon-auth.git
 cd neon-data-api-neon-auth
-bun install
+pnpm install
 ```
 
 ### 3. Configure Environment Variables
@@ -70,7 +70,7 @@ DATABASE_URL=postgresql://user:password@your-project-id.pooler.region.neon.tech/
 Run the migration to create the tables and RLS policies:
 
 ```bash
-bun run db:migrate
+pnpm db:migrate
 ```
 
 This will:
@@ -81,7 +81,7 @@ This will:
 ### 5. Start the Development Server
 
 ```bash
-bun dev
+pnpm dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
@@ -136,8 +136,8 @@ After deployment, update your Neon Auth settings to allow your Vercel domain:
 If you modify `src/db/schema.ts`, generate new migrations with:
 
 ```bash
-bun run db:generate
-bun run db:migrate
+pnpm db:generate
+pnpm db:migrate
 ```
 
 The `db:generate` command creates SQL migration files in the `/drizzle` folder based on your schema changes. You only need this when changing the database schema.
